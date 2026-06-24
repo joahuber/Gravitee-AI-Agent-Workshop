@@ -1129,7 +1129,9 @@
                           ]
                         }
                       },
-                      "required": []
+                      "required": [
+                        "bodySchema"
+                      ]
                     },
                     "name": "createBooking",
                     "description": "Create a booking\n\nCreate a new hotel room booking. The total price is automatically calculated from the room type nightly rate and stay duration. Validates hotel existence, room type, dates, and guest capacity."

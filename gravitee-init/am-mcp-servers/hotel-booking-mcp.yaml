@@ -24,3 +24,8 @@ tools:
     description: "Returns a list of bookings."
     type: "MCP_TOOL"
     scopes: []
+
+  - key: "createBooking"
+    description: "Create a new hotel booking."
+    type: "MCP_TOOL"
+    scopes: []

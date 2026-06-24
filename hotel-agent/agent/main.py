@@ -131,6 +131,26 @@ elicitation_mgr = ElicitationManager()
 
 # --- MCP Agent (4-steps pipeline) ---
 
+def _wrap_body_schema(schema: dict, args: dict) -> dict:
+    """Gravitee MCP gateway uses 'bodySchema' as the key for the HTTP request body.
+    LLMs tend to unwrap nested schemas and send flat args. This function re-wraps
+    them so Gravitee constructs the correct POST/PATCH body.
+
+    For tools with only bodySchema (e.g. createBooking): wrap all args.
+    For tools with bodySchema + path/query params (e.g. updateBooking): keep
+    the explicit top-level params and wrap the rest into bodySchema.
+    """
+    props = schema.get("properties", {})
+    if "bodySchema" not in props or "bodySchema" in args:
+        return args
+    explicit_params = {k for k in props if k != "bodySchema"}
+    top_level = {k: v for k, v in args.items() if k in explicit_params}
+    body = {k: v for k, v in args.items() if k not in explicit_params}
+    if body:
+        top_level["bodySchema"] = body
+    return top_level
+
+
 def _rate_limit_message(e: LLMRateLimitError) -> str:
     """Build a user-friendly rate limit message from LLM headers."""
     if e.reset:
@@ -152,7 +172,7 @@ class MCPAgent:
         self._ready = False
 
     async def initialize(self):
-        await self.mcp.connect_all(max_retries=3, connection_timeout=15)
+        await self.mcp.connect_all(max_retries=10, connection_timeout=60)
         if AM_TOKEN_URL:
             await self.auth.initialize()
         self._ready = True
@@ -191,6 +211,7 @@ class MCPAgent:
         # Step 1 — MCP Tools Discovery
         tools = await self.mcp.list_all_tools(extra_headers=mcp_headers or None)
         logger.info(f"Step 1 - MCP Tools Discovery: {len(tools)} tools availables.")
+        tool_schemas = {t["function"]["name"]: t["function"].get("parameters", {}) for t in tools}
 
         # Step 2 — LLM decides which tool to call (no history — just current message + tools)
         try:
@@ -213,6 +234,7 @@ class MCPAgent:
         # Step 3 — Execution of the selected tool (currently only supports the 1st one).
         tc = tool_calls[0]
         tool_name, tool_args = tc["function"]["name"], tc["function"]["arguments"]
+        tool_args = _wrap_body_schema(tool_schemas.get(tool_name, {}), tool_args)
         logger.info(f"Step 3 - Tool Execution: {tool_name}({json.dumps(tool_args)[:200]})")
 
         try:

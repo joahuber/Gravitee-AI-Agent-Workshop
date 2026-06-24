@@ -178,8 +178,6 @@
               "resourceName": "pii-detection-token-classification-resource",
               "threshold": 0.5,
               "categories": [
-                "PERSON",
-                "EMAIL",
                 "PHONE",
                 "FINANCIAL_ACCOUNT"
               ],

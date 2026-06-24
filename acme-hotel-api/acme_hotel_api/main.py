@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import urllib.error
+import urllib.request
 import uuid
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -12,6 +16,7 @@ from typing import Optional
 import yaml
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field, EmailStr
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -200,6 +205,66 @@ def _calculate_price(hotel: Hotel, room_type_key: str, check_in: date, check_out
 
 def _hotel_summary(h: Hotel) -> HotelSummary:
     return HotelSummary(**h.model_dump(exclude={"reviews"}))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  OpenFGA authorization (relationship tuples)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# The Gravitee gateway enforces booking visibility with an OpenFGA `can_view`
+# check (owner or admin-from-hotel). New bookings must register the same
+# relationship tuples the seed data uses, otherwise they get filtered out of
+# listBookings even though they exist. The API owns the bookings, so it writes
+# the tuples on creation. Failures are logged but never block the booking.
+
+OPENFGA_API_URL = os.getenv("OPENFGA_API_URL", "http://openfga:8080").rstrip("/")
+OPENFGA_STORE_NAME = os.getenv("OPENFGA_STORE_NAME", "Hotel Booking Authorization")
+
+_fga_store_id: Optional[str] = None
+
+
+def _fga_request(method: str, path: str, body: Optional[dict] = None) -> dict:
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        f"{OPENFGA_API_URL}{path}", data=data, method=method,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read() or b"{}")
+
+
+def _resolve_fga_store_id() -> str:
+    """Resolve the OpenFGA store id by name (cached after first lookup)."""
+    global _fga_store_id
+    if _fga_store_id:
+        return _fga_store_id
+    stores = _fga_request("GET", "/stores").get("stores", [])
+    store = next((s for s in stores if s.get("name") == OPENFGA_STORE_NAME), None)
+    if not store:
+        raise RuntimeError(f"OpenFGA store '{OPENFGA_STORE_NAME}' not found")
+    _fga_store_id = store["id"]
+    return _fga_store_id
+
+
+def _write_booking_tuples(booking: Booking) -> None:
+    """Register owner + hotel tuples so the gateway's can_view check allows the
+    guest (owner) and hotel admins to see the new booking. Mirrors seed data."""
+    store_id = _resolve_fga_store_id()
+    _fga_request("POST", f"/stores/{store_id}/write", {
+        "writes": {"tuple_keys": [
+            {"user": f"user:{booking.guest_email}", "relation": "owner", "object": f"booking:{booking.id}"},
+            {"user": f"hotel:{booking.hotel_id}", "relation": "hotel", "object": f"booking:{booking.id}"},
+        ]},
+    })
+
+
+async def _register_booking_authorization(booking: Booking) -> None:
+    """Best-effort OpenFGA registration; never fails the booking request."""
+    try:
+        await run_in_threadpool(_write_booking_tuples, booking)
+        logger.info(f"OpenFGA: registered owner/hotel tuples for {booking.id}")
+    except (urllib.error.URLError, RuntimeError, OSError, ValueError) as exc:
+        logger.warning(f"OpenFGA: failed to register tuples for {booking.id}: {exc}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -397,6 +462,7 @@ async def create_booking(body: BookingCreate):
     )
     _bookings[booking.id] = booking
     logger.info(f"Created booking {booking.id} at {hotel.name} for {body.guest_email}")
+    await _register_booking_authorization(booking)
     return booking
 
 

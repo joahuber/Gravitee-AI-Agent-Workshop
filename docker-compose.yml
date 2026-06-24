@@ -443,6 +443,9 @@ services:
       dockerfile: Dockerfile
     container_name: acme-hotel-api
     restart: unless-stopped
+    environment:
+      - OPENFGA_API_URL=http://openfga:8080
+      - OPENFGA_STORE_NAME=Hotel Booking Authorization
     ports:
       - "8000:8000"
     healthcheck:
