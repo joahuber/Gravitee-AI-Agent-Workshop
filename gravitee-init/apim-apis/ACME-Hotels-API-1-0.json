@@ -297,20 +297,6 @@
           ],
           "request": [
             {
-              "name": "Interrupt",
-              "description": "Verify that the request is made by the AI Agent acting on behalf of a user via OAuth 2.0 token exchange (delegated access). Rejects requests missing a valid act.sub claim or user email.",
-              "enabled": true,
-              "policy": "policy-interrupt",
-              "configuration": {
-                "errorKey": "AI_AGENT_DELEGATED_ACCESS_REQUIRED",
-                "variables": [],
-                "scope": "REQUEST",
-                "message": "Access denied: this endpoint requires a delegated access token issued to the AI Agent on behalf of an authenticated user.",
-                "statusCode": 403
-              },
-              "condition": "{#context.attributes['jwt.claims']['act']?.['sub'] != 'hotel-ai-agent' || #context.attributes['jwt.claims']['email'] == null}"
-            },
-            {
               "name": "Transform Headers",
               "description": "Extract User Email from JWT to push a custom header to the backend.",
               "enabled": true,

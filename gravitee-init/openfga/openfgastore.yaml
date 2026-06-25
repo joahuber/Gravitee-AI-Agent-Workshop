@@ -5,9 +5,12 @@ model: |+
 
   type user
 
+  type agent
+
   type system
     relations
       define accounting: [user]
+      define booking_creator: [agent with within_price_limit]
 
   type hotel
     relations
@@ -29,7 +32,33 @@ model: |+
       define room: [room]
       define system: [system]
 
+# ABAC conditions (injected into the authorization model). within_price_limit is
+# used by system.booking_creator: the booking price is supplied at check time and
+# compared against the limit stored in the relationship tuple's context.
+conditions:
+  within_price_limit:
+    name: within_price_limit
+    expression: "price <= limit"
+    parameters:
+      price:
+        type_name: TYPE_NAME_DOUBLE
+      limit:
+        type_name: TYPE_NAME_DOUBLE
+
 tuples:
+  # --- Agent spending limit (ABAC) ---
+  # The AI agent may create bookings only up to a price limit. The limit lives in
+  # this tuple's condition context; the backend passes the booking price at check
+  # time and OpenFGA evaluates within_price_limit (price <= limit). Change the
+  # limit here (or per agent) without touching code.
+  - user: agent:hotel-ai-agent
+    relation: booking_creator
+    object: system:acme
+    condition:
+      name: within_price_limit
+      context:
+        limit: 3000.0
+
   # --- Accounting role ---
   # The accountant can read EVERY booking (can_view via accounting from system)
   # but cannot modify any booking unless they own it (can_modify/can_cancel stay

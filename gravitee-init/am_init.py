@@ -823,22 +823,34 @@ class OpenFGAInitializer:
         result = []
         for t in types_str.split(","):
             t = t.strip()
+            # ABAC: "[agent with within_price_limit]" attaches a condition to the type.
+            condition = None
+            if " with " in t:
+                t, condition = (p.strip() for p in t.split(" with ", 1))
             if "#" in t:
                 type_name, relation = t.split("#", 1)
-                result.append({"type": type_name.strip(), "relation": relation.strip()})
+                entry = {"type": type_name.strip(), "relation": relation.strip()}
             else:
-                result.append({"type": t})
+                entry = {"type": t}
+            if condition:
+                entry["condition"] = condition
+            result.append(entry)
         return result
 
     # -- Authorization model -----------------------------------------------
 
-    def create_authorization_model(self, model_dsl: str) -> bool:
+    def create_authorization_model(self, model_dsl: str, conditions: Optional[Dict[str, Any]] = None) -> bool:
         self.log("Checking for existing authorization model...")
         try:
             model_json = self.parse_dsl_model(model_dsl)
             if not model_json.get("type_definitions"):
                 self.log("ERROR: Failed to parse model DSL — no type definitions")
                 return False
+
+            # ABAC: conditions are defined structurally in the config and merged in
+            # (the DSL parser only handles the relationship structure + "with <cond>").
+            if conditions:
+                model_json["conditions"] = conditions
 
             existing_id = self._find_existing_authorization_model(model_json)
             if existing_id:
@@ -947,11 +959,18 @@ class OpenFGAInitializer:
             self.log("No tuples to write")
             return True
         try:
+            tuple_keys = []
+            for t in tuples:
+                key = {"user": t["user"], "relation": t["relation"], "object": t["object"]}
+                # ABAC: carry an optional condition {name, context} (e.g. price limit).
+                if t.get("condition"):
+                    key["condition"] = t["condition"]
+                tuple_keys.append(key)
             r = self.session.post(
                 f"{FGA_BASE_URL}/stores/{self.store_id}/write",
                 json={
                     "writes": {
-                        "tuple_keys": [{"user": t["user"], "relation": t["relation"], "object": t["object"]} for t in tuples],
+                        "tuple_keys": tuple_keys,
                         "on_duplicate": "ignore",
                     },
                     "authorization_model_id": self.authorization_model_id,
@@ -985,7 +1004,7 @@ class OpenFGAInitializer:
         if not model_dsl:
             self.log("ERROR: No model found in configuration")
             return False
-        if not self.create_authorization_model(model_dsl):
+        if not self.create_authorization_model(model_dsl, config.get("conditions")):
             return False
 
         tuples = config.get("tuples", [])

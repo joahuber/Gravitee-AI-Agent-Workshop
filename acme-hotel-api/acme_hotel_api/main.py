@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field, EmailStr
 from starlette.concurrency import run_in_threadpool
 
@@ -222,6 +223,10 @@ OPENFGA_STORE_NAME = os.getenv("OPENFGA_STORE_NAME", "Hotel Booking Authorizatio
 # Singleton "system" object that every booking is linked to. The accounting role
 # is granted at this level so it resolves to can_view on every booking.
 OPENFGA_SYSTEM_ID = os.getenv("OPENFGA_SYSTEM_ID", "acme")
+# Actor (act.sub) that identifies the AI agent in delegated tokens. The agent's
+# booking price limit is enforced here, via the OpenFGA `booking_creator` relation
+# (an ABAC condition: price <= limit, with the limit stored in the tuple).
+OPENFGA_AGENT_ID = os.getenv("OPENFGA_AGENT_ID", "hotel-ai-agent")
 
 _fga_store_id: Optional[str] = None
 
@@ -270,6 +275,47 @@ async def _register_booking_authorization(booking: Booking) -> None:
         logger.info(f"OpenFGA: registered owner/hotel tuples for {booking.id}")
     except (urllib.error.URLError, RuntimeError, OSError, ValueError) as exc:
         logger.warning(f"OpenFGA: failed to register tuples for {booking.id}: {exc}")
+
+
+def _actor_sub(authorization: Optional[str]) -> Optional[str]:
+    """Read the act.sub (delegation actor) from the gateway-propagated JWT.
+
+    The gateway has already validated the signature (propagateAuthHeader), so the
+    backend only needs to read the claim — it base64-decodes the payload segment."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    try:
+        payload = authorization.split(None, 1)[1].split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+        act = claims.get("act") or {}
+        return act.get("sub")
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def _fga_check(user: str, relation: str, obj: str, context: Optional[dict] = None) -> bool:
+    """Evaluate an OpenFGA relationship, optionally with ABAC condition context."""
+    store_id = _resolve_fga_store_id()
+    body: dict = {"tuple_key": {"user": user, "relation": relation, "object": obj}}
+    if context:
+        body["context"] = context
+    resp = _fga_request("POST", f"/stores/{store_id}/check", body)
+    return bool(resp.get("allowed", False))
+
+
+async def _agent_may_book_at_price(actor: str, price: float) -> bool:
+    """Ask OpenFGA whether the agent may create a booking at this price. The limit
+    lives in the `booking_creator` tuple's condition context (ABAC). Fails closed
+    (deny) if the decision cannot be obtained."""
+    try:
+        return await run_in_threadpool(
+            _fga_check, f"agent:{actor}", "booking_creator",
+            f"system:{OPENFGA_SYSTEM_ID}", {"price": price},
+        )
+    except (urllib.error.URLError, RuntimeError, OSError, ValueError) as exc:
+        logger.warning(f"OpenFGA: price-limit check failed for agent:{actor} at {price}: {exc}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -430,12 +476,16 @@ async def get_booking(booking_id: str):
     summary="Create a booking",
     operation_id="createBooking",
     description=(
-        "Create a new hotel room booking. The total price is automatically "
-        "calculated from the room type nightly rate and stay duration. "
-        "Validates hotel existence, room type, dates, and guest capacity."
+        "Create a new hotel room booking. The total price is calculated from the room "
+        "type's nightly rate and the stay duration. When the caller is the AI agent, the "
+        "booking price is authorized against the OpenFGA spending limit. Validates hotel "
+        "existence, room type, dates, and guest capacity."
     ),
 )
-async def create_booking(body: BookingCreate):
+async def create_booking(
+    body: BookingCreate,
+    authorization: Optional[str] = Header(None, include_in_schema=False),
+):
     hotel = _hotels.get(body.hotel_id)
     if not hotel:
         raise HTTPException(status_code=404, detail=f"Hotel '{body.hotel_id}' not found")
@@ -452,6 +502,17 @@ async def create_booking(body: BookingCreate):
         raise HTTPException(status_code=400, detail=f"Room type '{body.room_type}' has a maximum capacity of {room.capacity} guests")
 
     total = _calculate_price(hotel, body.room_type, body.check_in, body.check_out)
+
+    # Spending limit: if this request is the AI agent acting on a user's behalf, ask
+    # OpenFGA whether the agent may book at this (server-computed) price — an ABAC
+    # condition price <= limit, with the limit stored in the booking_creator tuple.
+    # Humans are not subject to this limit. Enforced here in the backend.
+    actor = _actor_sub(authorization)
+    if actor == OPENFGA_AGENT_ID and not await _agent_may_book_at_price(actor, total):
+        raise HTTPException(
+            status_code=403,
+            detail=f"The AI agent is not authorized to create a booking priced at {total} (exceeds the configured spending limit).",
+        )
     booking = Booking(
         id=_next_booking_id(),
         hotel_id=body.hotel_id,

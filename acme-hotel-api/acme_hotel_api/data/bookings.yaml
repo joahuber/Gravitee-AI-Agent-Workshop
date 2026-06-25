@@ -3,7 +3,8 @@ bookings:
     hotel_id: "grand-london"
     guest_name: "John Doe"
     guest_email: "john.doe@gravitee.io"
-    room_type: "deluxe"
+    room_type:
+
     check_in_offset_days: -15
     check_out_offset_days: -8
     guests: 2
