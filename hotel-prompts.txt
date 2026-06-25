@@ -1,0 +1,15 @@
+create another booking "Hotel ID: "grand-london" Guest Full Name: "John Doe" Guest Email Address: "john.doe@gravitee.io" Room Type (e.g., Standard, Deluxe): "deluxe" Check-in Date: 2026-07-01 Check-out Date: 2026-07-02"
+
+# --- Accounting account (login: accountant@gravitee.io / HelloWorld@123) ---
+
+# Reads ALL bookings (accounting can_view every booking, not just its own)
+show me all bookings in the system
+
+# Denied: accounting may not create a booking on behalf of someone else (guest_email != caller)
+create another booking "Hotel ID: "grand-london" Guest Full Name: "John Doe" Guest Email Address: "john.doe@gravitee.io" Room Type (e.g., Standard, Deluxe): "deluxe" Check-in Date: 2026-07-01 Check-out Date: 2026-07-02"
+
+# Allowed: accounting creates a booking for itself (guest_email == caller)
+create another booking "Hotel ID: "grand-london" Guest Full Name: "Anna Accountant" Guest Email Address: "accountant@gravitee.io" Room Type (e.g., Standard, Deluxe): "deluxe" Check-in Date: 2026-07-01 Check-out Date: 2026-07-02"
+
+# Denied: accounting may not modify a booking it does not own
+change booking BK-0002 to 1 guest

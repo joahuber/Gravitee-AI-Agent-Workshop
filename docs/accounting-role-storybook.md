@@ -12,11 +12,15 @@ set and performs no authorization itself.
 
 ## The story
 
-| Actor | Reads | Modifies / Cancels |
-|-------|-------|--------------------|
-| **Guest** (e.g. `john.doe`) | only their own bookings | only their own bookings |
-| **Accounting** (`accountant`) | **every** booking | **nothing** (unless they are also the guest) |
-| **Anonymous** (no token) | nothing — blocked at the gateway | nothing — blocked at the gateway |
+| Actor | Reads | Creates | Modifies / Cancels |
+|-------|-------|---------|--------------------|
+| **Guest** (e.g. `john.doe`) | only their own bookings | only for themselves | only their own bookings |
+| **Accounting** (`accountant`) | **every** booking | only for themselves | **nothing** (unless they are also the guest) |
+| **Anonymous** (no token) | nothing — blocked at the gateway | nothing — blocked at the gateway | nothing — blocked at the gateway |
+
+> **Create rule:** anyone may create a booking, but only **for themselves** — the
+> `guest_email` in the request must equal the caller's authenticated email. So the
+> accounting user cannot create a booking on behalf of `john.doe`.
 
 ### How it works
 
@@ -31,6 +35,7 @@ AI Agent ──(MCP tool call, delegated JWT)──▶ MCP Server API (/hotels-m
                                                ├─ request:  Interrupt (delegated-access check)
                                                ├─ request:  Transform Headers (X-User-Email)
                                                ├─ request:  FGA Write Authorization   ← NEW (PATCH/DELETE)
+                                               ├─ request:  Self-Booking Authorization ← NEW (POST: guest_email == caller)
                                                └─ response: FGA Response Filter        (GET list, can_view)
                                                    │
                                                    ▼
@@ -252,6 +257,7 @@ PLAN: AI Agent | JWT
     request -> Interrupt ( policy-interrupt )
     request -> Transform Headers ( transform-headers )
     request -> FGA Write Authorization ( groovy )
+    request -> Self-Booking Authorization ( groovy )
     response -> FGA Response Filter ( groovy )
 ```
 
@@ -291,7 +297,30 @@ through the website. Every step is visualized in the embedded **AI Agent Inspect
    **FGA Write Authorization** policy (`can_modify` → `false`) *before* it reaches the
    backend. The agent reports it is not allowed to modify that booking.
 
-### Scene 3 — A guest **can** modify their **own** booking
+### Scene 3 — Accounting is **denied** creating a booking for someone else
+
+1. Still logged in as `accountant@gravitee.io`, ask:
+   **"Book the deluxe room at Grand London for John Doe (john.doe@gravitee.io) from
+   2026-07-01 to 2026-07-02."**
+2. ✅ **Expected:** **403**. The `createBooking` tool call → `POST /hotels/bookings`
+   is stopped by the **Self-Booking Authorization** policy, because the body's
+   `guest_email` (`john.doe@gravitee.io`) does not match the caller
+   (`accountant@gravitee.io`). The agent reports it can only create bookings for the
+   signed-in user.
+
+   > This is the exact request that previously went through:
+   > ```json
+   > { "bodySchema": { "check_in": "2026-07-01", "check_out": "2026-07-02",
+   >   "hotel_id": "grand-london", "guest_name": "John Doe",
+   >   "guest_email": "john.doe@gravitee.io", "room_type": "deluxe" } }
+   > ```
+
+3. Now ask the accountant to book **for themselves**:
+   **"Book the deluxe room at Grand London for me from 2026-07-01 to 2026-07-02."**
+   ✅ **Expected:** **succeeds** — `guest_email` is `accountant@gravitee.io`, matching the
+   caller, so the policy passes and the booking is created.
+
+### Scene 4 — A guest **can** modify their **own** booking
 
 1. Log out, then log in as the **guest** user:
    - Email: `john.doe@gravitee.io`
@@ -322,6 +351,7 @@ through the website. Every step is visualized in the embedded **AI Agent Inspect
 | Operation | MCP tool | HTTP at gateway | Enforced by | Rule |
 |-----------|----------|-----------------|-------------|------|
 | Read list | `listBookings` | `GET /hotels/bookings` | **FGA Response Filter** (response) | keep booking if `can_view` |
+| Create | `createBooking` | `POST /hotels/bookings` | **Self-Booking Authorization** (request) | allow if `guest_email` == caller email |
 | Modify | `updateBooking` | `PATCH /hotels/bookings/:id` | **FGA Write Authorization** (request) | allow if `can_modify` |
 | Cancel | `cancelBooking` | `DELETE /hotels/bookings/:id` | **FGA Write Authorization** (request) | allow if `can_cancel` |
 | Anything anonymous | — | `* /hotels/bookings*` (KEY_LESS) | **Block Anonymous Booking Access** (request) | always 403 |
