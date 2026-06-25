@@ -98,8 +98,8 @@ class Booking(BaseModel):
     id: str = Field(..., description="Booking reference", examples=["BK-0001"])
     hotel_id: str = Field(..., description="Hotel identifier", examples=["grand-london"])
     hotel_name: str = Field(..., description="Hotel name (denormalised for convenience)", examples=["The Grand London"])
-    guest_name: str = Field(..., description="Guest full name", examples=["John Doe"])
-    guest_email: EmailStr = Field(..., description="Guest email address", examples=["john.doe@example.com"])
+    guest_name: str = Field(..., description="Guest full name", examples=["Louis Litt"])
+    guest_email: EmailStr = Field(..., description="Guest email address", examples=["louis.litt@littwheelerwilliamsbennett.com"])
     room_type: str = Field(..., description="Room type booked", examples=["deluxe"])
     check_in: date = Field(..., description="Check-in date", examples=["2025-06-15"])
     check_out: date = Field(..., description="Check-out date", examples=["2025-06-22"])
@@ -108,13 +108,23 @@ class Booking(BaseModel):
     total_price: float = Field(..., description="Total price in USD", examples=[3360.00])
     notes: str = Field("", description="Special requests or notes")
     created_at: datetime = Field(..., description="Booking creation timestamp")
+    created_by_user: Optional[str] = Field(
+        None,
+        description="Identity of the user who created the booking (for an agent call, the user the agent acted on behalf of).",
+        examples=["louis.litt@littwheelerwilliamsbennett.com"],
+    )
+    created_by_agent: Optional[str] = Field(
+        None,
+        description="Identity of the AI agent that created the booking on the user's behalf, or null when a user created it directly.",
+        examples=["hotel-ai-agent"],
+    )
 
 
 class BookingCreate(BaseModel):
     """Request body to create a new booking."""
     hotel_id: str = Field(..., description="Hotel identifier", examples=["grand-london"])
-    guest_name: str = Field(..., description="Guest full name", examples=["John Doe"])
-    guest_email: EmailStr = Field(..., description="Guest email address", examples=["john.doe@example.com"])
+    guest_name: str = Field(..., description="Guest full name", examples=["Louis Litt"])
+    guest_email: EmailStr = Field(..., description="Guest email address", examples=["louis.litt@littwheelerwilliamsbennett.com"])
     room_type: str = Field(..., description="Room type to book", examples=["deluxe"])
     check_in: date = Field(..., description="Check-in date (YYYY-MM-DD)", examples=["2025-06-15"])
     check_out: date = Field(..., description="Check-out date (YYYY-MM-DD)", examples=["2025-06-22"])
@@ -169,6 +179,7 @@ def _load_bookings(hotels: dict[str, Hotel]) -> dict[str, Booking]:
             total_price=b["total_price"],
             notes=b.get("notes", ""),
             created_at=datetime.now(),
+            created_by_user=b.get("created_by_user"),
         )
         bookings[booking.id] = booking
     return bookings
@@ -277,21 +288,28 @@ async def _register_booking_authorization(booking: Booking) -> None:
         logger.warning(f"OpenFGA: failed to register tuples for {booking.id}: {exc}")
 
 
-def _actor_sub(authorization: Optional[str]) -> Optional[str]:
-    """Read the act.sub (delegation actor) from the gateway-propagated JWT.
+def _jwt_claims(authorization: Optional[str]) -> dict:
+    """Read the claims from the gateway-propagated JWT.
 
     The gateway has already validated the signature (propagateAuthHeader), so the
-    backend only needs to read the claim — it base64-decodes the payload segment."""
+    backend only needs to read the claims — it base64-decodes the payload segment."""
     if not authorization or not authorization.lower().startswith("bearer "):
-        return None
+        return {}
     try:
         payload = authorization.split(None, 1)[1].split(".")[1]
         payload += "=" * (-len(payload) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(payload))
-        act = claims.get("act") or {}
-        return act.get("sub")
+        return json.loads(base64.urlsafe_b64decode(payload))
     except (ValueError, IndexError, TypeError):
-        return None
+        return {}
+
+
+def _caller_identity(authorization: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Return (user_email, agent_id) for the caller. user_email is the user the
+    request acts for; agent_id is the delegation actor (act.sub) when an AI agent
+    is acting on the user's behalf, otherwise None."""
+    claims = _jwt_claims(authorization)
+    agent = (claims.get("act") or {}).get("sub")
+    return claims.get("email"), agent
 
 
 def _fga_check(user: str, relation: str, obj: str, context: Optional[dict] = None) -> bool:
@@ -503,12 +521,15 @@ async def create_booking(
 
     total = _calculate_price(hotel, body.room_type, body.check_in, body.check_out)
 
+    # Who is creating this booking? The acting user (always) and, when an AI agent is
+    # acting on the user's behalf (delegated token), the agent identity too.
+    user_email, agent = _caller_identity(authorization)
+
     # Spending limit: if this request is the AI agent acting on a user's behalf, ask
     # OpenFGA whether the agent may book at this (server-computed) price — an ABAC
     # condition price <= limit, with the limit stored in the booking_creator tuple.
     # Humans are not subject to this limit. Enforced here in the backend.
-    actor = _actor_sub(authorization)
-    if actor == OPENFGA_AGENT_ID and not await _agent_may_book_at_price(actor, total):
+    if agent == OPENFGA_AGENT_ID and not await _agent_may_book_at_price(agent, total):
         raise HTTPException(
             status_code=403,
             detail=f"The AI agent is not authorized to create a booking priced at {total} (exceeds the configured spending limit).",
@@ -527,9 +548,12 @@ async def create_booking(
         total_price=total,
         notes=body.notes,
         created_at=datetime.now(),
+        created_by_user=user_email,
+        created_by_agent=agent,
     )
     _bookings[booking.id] = booking
-    logger.info(f"Created booking {booking.id} at {hotel.name} for {body.guest_email}")
+    creator = f"agent '{agent}' on behalf of '{user_email}'" if agent else f"user '{user_email}'"
+    logger.info(f"Created booking {booking.id} at {hotel.name} for guest {body.guest_email} (created by {creator})")
     await _register_booking_authorization(booking)
     return booking
 

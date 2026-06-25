@@ -14,13 +14,13 @@ set and performs no authorization itself.
 
 | Actor | Reads | Creates | Modifies / Cancels |
 |-------|-------|---------|--------------------|
-| **Guest** (e.g. `john.doe`) | only their own bookings | only for themselves | only their own bookings |
+| **Guest** (e.g. `louis.litt`) | only their own bookings | only for themselves | only their own bookings |
 | **Accounting** (`accountant`) | **every** booking | only for themselves | **nothing** (unless they are also the guest) |
 | **Anonymous** (no token) | nothing — blocked at the gateway | nothing — blocked at the gateway | nothing — blocked at the gateway |
 
 > **Create rule:** anyone may create a booking, but only **for themselves** — the
 > `guest_email` in the request must equal the caller's authenticated email. So the
-> accounting user cannot create a booking on behalf of `john.doe`.
+> accounting user cannot create a booking on behalf of `louis.litt`.
 
 ### How it works
 
@@ -74,8 +74,8 @@ type booking
 | APIM Gateway (path `/hotels/…`) | `http://localhost:8082` |
 | AM Gateway (OAuth + AuthZen) | `http://localhost:8092` |
 | MCP server OAuth client | `hotel-mcp` / `hotel-mcp` |
-| Guest user | `john.doe@gravitee.io` / `HelloWorld@123` |
-| Accounting user | `accountant@gravitee.io` / `HelloWorld@123` |
+| Guest user | `louis.litt@littwheelerwilliamsbennett.com` / `HelloWorld@123` |
+| Accounting user | `mike.ross@littwheelerwilliamsbennett.com` / `HelloWorld@123` |
 | Seed bookings | `BK-0001` … `BK-0008` |
 
 > `BK-0005` is intentionally seeded **without** an `owner` tuple, to demonstrate that a
@@ -162,63 +162,63 @@ eval_fga() {
 
 ```bash
 for b in BK-0001 BK-0002 BK-0003 BK-0004 BK-0005 BK-0006 BK-0007 BK-0008; do
-  eval_fga accountant@gravitee.io can_view $b
+  eval_fga mike.ross@littwheelerwilliamsbennett.com can_view $b
 done
 ```
 
 Expected — **all `True`**:
 
 ```
-  accountant@gravitee.io       can_view     BK-0001   -> True
-  accountant@gravitee.io       can_view     BK-0002   -> True
-  accountant@gravitee.io       can_view     BK-0003   -> True
-  accountant@gravitee.io       can_view     BK-0004   -> True
-  accountant@gravitee.io       can_view     BK-0005   -> True
-  accountant@gravitee.io       can_view     BK-0006   -> True
-  accountant@gravitee.io       can_view     BK-0007   -> True
-  accountant@gravitee.io       can_view     BK-0008   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0001   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0002   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0003   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0004   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0005   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0006   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0007   -> True
+  mike.ross@littwheelerwilliamsbennett.com       can_view     BK-0008   -> True
 ```
 
 #### 3b — Guest scoping preserved (john sees own, not BK-0005)
 
 ```bash
-eval_fga john.doe@gravitee.io can_view BK-0001
-eval_fga john.doe@gravitee.io can_view BK-0005
+eval_fga louis.litt@littwheelerwilliamsbennett.com can_view BK-0001
+eval_fga louis.litt@littwheelerwilliamsbennett.com can_view BK-0005
 ```
 
 Expected:
 
 ```
-  john.doe@gravitee.io         can_view     BK-0001   -> True
-  john.doe@gravitee.io         can_view     BK-0005   -> False
+  louis.litt@littwheelerwilliamsbennett.com         can_view     BK-0001   -> True
+  louis.litt@littwheelerwilliamsbennett.com         can_view     BK-0005   -> False
 ```
 
 #### 3c — Accounting cannot modify or cancel
 
 ```bash
-eval_fga accountant@gravitee.io can_modify BK-0002
-eval_fga accountant@gravitee.io can_cancel BK-0002
+eval_fga mike.ross@littwheelerwilliamsbennett.com can_modify BK-0002
+eval_fga mike.ross@littwheelerwilliamsbennett.com can_cancel BK-0002
 ```
 
 Expected:
 
 ```
-  accountant@gravitee.io       can_modify   BK-0002   -> False
-  accountant@gravitee.io       can_cancel   BK-0002   -> False
+  mike.ross@littwheelerwilliamsbennett.com       can_modify   BK-0002   -> False
+  mike.ross@littwheelerwilliamsbennett.com       can_cancel   BK-0002   -> False
 ```
 
 #### 3d — Owner (john) can modify and cancel his own booking
 
 ```bash
-eval_fga john.doe@gravitee.io can_modify BK-0002
-eval_fga john.doe@gravitee.io can_cancel BK-0002
+eval_fga louis.litt@littwheelerwilliamsbennett.com can_modify BK-0002
+eval_fga louis.litt@littwheelerwilliamsbennett.com can_cancel BK-0002
 ```
 
 Expected:
 
 ```
-  john.doe@gravitee.io         can_modify   BK-0002   -> True
-  john.doe@gravitee.io         can_cancel   BK-0002   -> True
+  louis.litt@littwheelerwilliamsbennett.com         can_modify   BK-0002   -> True
+  louis.litt@littwheelerwilliamsbennett.com         can_cancel   BK-0002   -> True
 ```
 
 ### (Optional) Confirm the new policies are live in the deployed gateway
@@ -279,7 +279,7 @@ through the website. Every step is visualized in the embedded **AI Agent Inspect
 ### Scene 1 — Accounting reads **all** bookings
 
 1. Log in as the **accounting** user:
-   - Email: `accountant@gravitee.io`
+   - Email: `mike.ross@littwheelerwilliamsbennett.com`
    - Password: `HelloWorld@123`
 2. In the chat, ask: **"List all bookings."**
 3. ✅ **Expected:** the agent returns **all 8 bookings** (BK-0001 … BK-0008), including
@@ -290,7 +290,7 @@ through the website. Every step is visualized in the embedded **AI Agent Inspect
 
 ### Scene 2 — Accounting is **denied** modifying a booking it doesn't own
 
-1. Still logged in as `accountant@gravitee.io`, ask:
+1. Still logged in as `mike.ross@littwheelerwilliamsbennett.com`, ask:
    **"Change the number of guests on booking BK-0002 to 1."**
 2. ✅ **Expected:** the request is **rejected with 403**. In the inspector the
    `updateBooking` tool call → `PATCH /hotels/bookings/BK-0002` is stopped by the
@@ -299,31 +299,31 @@ through the website. Every step is visualized in the embedded **AI Agent Inspect
 
 ### Scene 3 — Accounting is **denied** creating a booking for someone else
 
-1. Still logged in as `accountant@gravitee.io`, ask:
-   **"Book the deluxe room at Grand London for John Doe (john.doe@gravitee.io) from
+1. Still logged in as `mike.ross@littwheelerwilliamsbennett.com`, ask:
+   **"Book the deluxe room at Grand London for Louis Litt (louis.litt@littwheelerwilliamsbennett.com) from
    2026-07-01 to 2026-07-02."**
 2. ✅ **Expected:** **403**. The `createBooking` tool call → `POST /hotels/bookings`
    is stopped by the **Self-Booking Authorization** policy, because the body's
-   `guest_email` (`john.doe@gravitee.io`) does not match the caller
-   (`accountant@gravitee.io`). The agent reports it can only create bookings for the
+   `guest_email` (`louis.litt@littwheelerwilliamsbennett.com`) does not match the caller
+   (`mike.ross@littwheelerwilliamsbennett.com`). The agent reports it can only create bookings for the
    signed-in user.
 
    > This is the exact request that previously went through:
    > ```json
    > { "bodySchema": { "check_in": "2026-07-01", "check_out": "2026-07-02",
-   >   "hotel_id": "grand-london", "guest_name": "John Doe",
-   >   "guest_email": "john.doe@gravitee.io", "room_type": "deluxe" } }
+   >   "hotel_id": "grand-london", "guest_name": "Louis Litt",
+   >   "guest_email": "louis.litt@littwheelerwilliamsbennett.com", "room_type": "deluxe" } }
    > ```
 
 3. Now ask the accountant to book **for themselves**:
    **"Book the deluxe room at Grand London for me from 2026-07-01 to 2026-07-02."**
-   ✅ **Expected:** **succeeds** — `guest_email` is `accountant@gravitee.io`, matching the
+   ✅ **Expected:** **succeeds** — `guest_email` is `mike.ross@littwheelerwilliamsbennett.com`, matching the
    caller, so the policy passes and the booking is created.
 
 ### Scene 4 — A guest **can** modify their **own** booking
 
 1. Log out, then log in as the **guest** user:
-   - Email: `john.doe@gravitee.io`
+   - Email: `louis.litt@littwheelerwilliamsbennett.com`
    - Password: `HelloWorld@123`
 2. Ask: **"Show my bookings."**
    ✅ **Expected:** only **john's own** bookings (`BK-0001`, `BK-0002`) — not other

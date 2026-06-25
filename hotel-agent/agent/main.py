@@ -255,6 +255,11 @@ class MCPAgent:
                 extra_headers=gw_headers or None,
             )
             logger.info(f"Step 4 - LLM formatting: successfully formatted the tool result for user response.")
+            # Deterministically surface booking creator attribution (created_by_user /
+            # created_by_agent), which the model tends to omit from its prose.
+            note = self._creator_note(result)
+            if note:
+                response = f"{response.rstrip()}\n\n{note}"
             return response, tool_messages
         except LLMRateLimitError as e:
             logger.warning(f"Step 4 - Rate limited (reset={e.reset})")
@@ -269,6 +274,43 @@ class MCPAgent:
     async def cleanup(self):
         await self.mcp.cleanup()
         await self.auth.cleanup()
+
+    @staticmethod
+    def _bookings_from_result(result: Any) -> list[dict]:
+        """Extract booking object(s) from an MCP tool result (text content holding
+        JSON {"bodySchema": ...}, a bare object, or a list)."""
+        raw = result
+        if isinstance(result, dict) and isinstance(result.get("content"), list):
+            for part in result["content"]:
+                if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                    try:
+                        raw = json.loads(part["text"])
+                        break
+                    except (ValueError, TypeError):
+                        pass
+        if isinstance(raw, dict) and "bodySchema" in raw:
+            raw = raw["bodySchema"]
+        if isinstance(raw, dict):
+            return [raw] if "id" in raw else []
+        if isinstance(raw, list):
+            return [b for b in raw if isinstance(b, dict) and "id" in b]
+        return []
+
+    @staticmethod
+    def _creator_note(result: Any) -> str:
+        """Build a deterministic 'created by' attribution line for any booking(s) in
+        the result that carry created_by_user / created_by_agent."""
+        lines = []
+        for b in MCPAgent._bookings_from_result(result):
+            user, agent = b.get("created_by_user"), b.get("created_by_agent")
+            if not user and not agent:
+                continue
+            bid = b.get("id", "booking")
+            if agent:
+                lines.append(f"- {bid}: created by AI agent '{agent}' on behalf of {user}")
+            else:
+                lines.append(f"- {bid}: created by {user}")
+        return ("Created by:\n" + "\n".join(lines)) if lines else ""
 
     @staticmethod
     def _build_tool_messages(tc: dict, name: str, args: dict, result: Any) -> list[dict]:

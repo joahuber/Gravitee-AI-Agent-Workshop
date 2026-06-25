@@ -1,10 +1,10 @@
 bookings:
   - id: "BK-0001"
     hotel_id: "grand-london"
-    guest_name: "John Doe"
-    guest_email: "john.doe@gravitee.io"
-    room_type:
-
+    guest_name: "Louis Litt"
+    guest_email: "louis.litt@littwheelerwilliamsbennett.com"
+    created_by_user: "louis.litt@littwheelerwilliamsbennett.com"
+    room_type: "deluxe"
     check_in_offset_days: -15
     check_out_offset_days: -8
     guests: 2
@@ -14,8 +14,9 @@ bookings:
 
   - id: "BK-0002"
     hotel_id: "chateau-paris"
-    guest_name: "John Doe"
-    guest_email: "john.doe@gravitee.io"
+    guest_name: "Louis Litt"
+    guest_email: "louis.litt@littwheelerwilliamsbennett.com"
+    created_by_user: "louis.litt@littwheelerwilliamsbennett.com"
     room_type: "suite"
     check_in_offset_days: 10
     check_out_offset_days: 17
@@ -28,6 +29,7 @@ bookings:
     hotel_id: "manhattan-grand"
     guest_name: "Jane Doe"
     guest_email: "jane.doe@gravitee.io"
+    created_by_user: "jane.doe@gravitee.io"
     room_type: "deluxe"
     check_in_offset_days: -10
     check_out_offset_days: -3
@@ -40,6 +42,7 @@ bookings:
     hotel_id: "riverside-inn"
     guest_name: "Jane Doe"
     guest_email: "jane.doe@gravitee.io"
+    created_by_user: "jane.doe@gravitee.io"
     room_type: "family"
     check_in_offset_days: 5
     check_out_offset_days: 12
@@ -50,8 +53,9 @@ bookings:
 
   - id: "BK-0005"
     hotel_id: "imperial-tokyo"
-    guest_name: "John Doe"
-    guest_email: "john.doe@gravitee.io"
+    guest_name: "Louis Litt"
+    guest_email: "louis.litt@littwheelerwilliamsbennett.com"
+    created_by_user: "louis.litt@littwheelerwilliamsbennett.com"
     room_type: "standard"
     check_in_offset_days: 30
     check_out_offset_days: 37
@@ -64,6 +68,7 @@ bookings:
     hotel_id: "gothic-quarter"
     guest_name: "Alice Martin"
     guest_email: "alice.martin@gravitee.io"
+    created_by_user: "alice.martin@gravitee.io"
     room_type: "deluxe"
     check_in_offset_days: -5
     check_out_offset_days: -1
@@ -76,6 +81,7 @@ bookings:
     hotel_id: "canal-house"
     guest_name: "Alice Martin"
     guest_email: "alice.martin@gravitee.io"
+    created_by_user: "alice.martin@gravitee.io"
     room_type: "suite"
     check_in_offset_days: 20
     check_out_offset_days: 25
@@ -88,6 +94,7 @@ bookings:
     hotel_id: "bondi-surf-lodge"
     guest_name: "Bob Smith"
     guest_email: "bob.smith@gravitee.io"
+    created_by_user: "bob.smith@gravitee.io"
     room_type: "deluxe"
     check_in_offset_days: 15
     check_out_offset_days: 25

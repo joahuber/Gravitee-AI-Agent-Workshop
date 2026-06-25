@@ -32,10 +32,10 @@ APPS_CONFIG_DIR = os.getenv("APPS_CONFIG_DIR", "/app/am-apps")
 MCP_SERVERS_CONFIG_DIR = os.getenv("MCP_SERVERS_CONFIG_DIR", "/app/am-mcp-servers")
 
 # User configuration
-USER_FIRST_NAME = "John"
-USER_LAST_NAME = "Doe"
-USER_EMAIL = "john.doe@gravitee.io"
-USER_USERNAME = "john.doe@gravitee.io"
+USER_FIRST_NAME = "Louis"
+USER_LAST_NAME = "Litt"
+USER_EMAIL = "louis.litt@littwheelerwilliamsbennett.com"
+USER_USERNAME = "louis.litt@littwheelerwilliamsbennett.com"
 USER_PASSWORD = "HelloWorld@123"
 
 # Demo users to provision in the security domain. The accountant holds the
@@ -49,10 +49,10 @@ USERS = [
         "password": USER_PASSWORD,
     },
     {
-        "firstName": "Anna",
-        "lastName": "Accountant",
-        "email": "accountant@gravitee.io",
-        "username": "accountant@gravitee.io",
+        "firstName": "Mike",
+        "lastName": "Ross",
+        "email": "mike.ross@littwheelerwilliamsbennett.com",
+        "username": "mike.ross@littwheelerwilliamsbennett.com",
         "password": USER_PASSWORD,
     },
 ]

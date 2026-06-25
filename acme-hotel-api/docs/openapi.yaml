@@ -365,14 +365,14 @@ components:
           title: Guest Name
           description: Guest full name
           examples:
-          - John Doe
+          - Louis Litt
         guest_email:
           type: string
           format: email
           title: Guest Email
           description: Guest email address
           examples:
-          - john.doe@example.com
+          - louis.litt@littwheelerwilliamsbennett.com
         room_type:
           type: string
           title: Room Type
@@ -450,14 +450,14 @@ components:
           title: Guest Name
           description: Guest full name
           examples:
-          - John Doe
+          - Louis Litt
         guest_email:
           type: string
           format: email
           title: Guest Email
           description: Guest email address
           examples:
-          - john.doe@example.com
+          - louis.litt@littwheelerwilliamsbennett.com
         room_type:
           type: string
           title: Room Type

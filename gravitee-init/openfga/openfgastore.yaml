@@ -63,7 +63,7 @@ tuples:
   # The accountant can read EVERY booking (can_view via accounting from system)
   # but cannot modify any booking unless they own it (can_modify/can_cancel stay
   # owner-or-admin). Bookings are linked to the singleton system:acme below.
-  - user: user:accountant@gravitee.io
+  - user: user:mike.ross@littwheelerwilliamsbennett.com
     relation: accounting
     object: system:acme
 
@@ -94,13 +94,13 @@ tuples:
     object: booking:BK-0008
 
   # --- Hotel guest relationships ---
-  - user: user:john.doe@gravitee.io
+  - user: user:louis.litt@littwheelerwilliamsbennett.com
     relation: guest
     object: hotel:grand-london
-  - user: user:john.doe@gravitee.io
+  - user: user:louis.litt@littwheelerwilliamsbennett.com
     relation: guest
     object: hotel:chateau-paris
-  # Note: john.doe is NOT a guest at imperial-tokyo → BK-0005 won't pass can_view
+  # Note: louis.litt is NOT a guest at imperial-tokyo → BK-0005 won't pass can_view
 
   # --- Booking ↔ Hotel relationships ---
   - user: hotel:grand-london
@@ -114,10 +114,10 @@ tuples:
     object: booking:BK-0005
 
   # --- Booking ownership ---
-  - user: user:john.doe@gravitee.io
+  - user: user:louis.litt@littwheelerwilliamsbennett.com
     relation: owner
     object: booking:BK-0001
-  - user: user:john.doe@gravitee.io
+  - user: user:louis.litt@littwheelerwilliamsbennett.com
     relation: owner
     object: booking:BK-0002
-  # BK-0005 has no owner tuple for john.doe → FGA will deny can_view
+  # BK-0005 has no owner tuple for louis.litt → FGA will deny can_view

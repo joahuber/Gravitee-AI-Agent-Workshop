@@ -52,7 +52,7 @@ A hands-on workshop demonstrating how to build, secure, and govern AI agents usi
    Send *"Show me my bookings."* without being logged in. The agent tries to call the `listBookings` tool, but the MCP call fails with an "Access denied" error. You can see this in the inspector.
 
    Now click **Sign In** in the top right corner and log in with:
-   - Email: `john.doe@gravitee.io`
+   - Email: `louis.litt@littwheelerwilliamsbennett.com`
    - Password: `HelloWorld@123`
 
    Consent to share the required information when prompted.
@@ -474,7 +474,7 @@ You can explore the Fine-Grained Authorization configuration in the [Gravitee AM
 
 1. **Without authentication:** Ask *"Show me hotels in Paris"* and it works (public data)
 2. **Without authentication:** Ask *"Show me my bookings"* and it fails (needs identity)
-3. **Log in** as `john.doe@gravitee.io` / `HelloWorld@123`
+3. **Log in** as `louis.litt@littwheelerwilliamsbennett.com` / `HelloWorld@123`
 4. **After authentication:** Ask *"Show me my bookings"* and it works (identity and permissions verified)
 
 > **Key Insight:** The agent doesn't hardcode authorization logic. It relies on Gravitee AM for identity and permissions, making the security model flexible and auditable.
