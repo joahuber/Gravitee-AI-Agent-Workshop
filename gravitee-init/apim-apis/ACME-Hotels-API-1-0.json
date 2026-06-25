@@ -230,7 +230,41 @@
   "plans": [
     {
       "definitionVersion": "V4",
-      "flows": [],
+      "flows": [
+        {
+          "name": "Protect Bookings",
+          "enabled": true,
+          "selectors": [
+            {
+              "type": "HTTP",
+              "path": "/bookings",
+              "pathOperator": "STARTS_WITH",
+              "methods": []
+            }
+          ],
+          "request": [
+            {
+              "name": "Block Anonymous Booking Access",
+              "description": "Booking endpoints carry per-user data and are authorized via OpenFGA on the AI Agent (JWT) plan. Deny all keyless access to /bookings so the unauthenticated plan cannot read or modify bookings.",
+              "enabled": true,
+              "policy": "policy-interrupt",
+              "configuration": {
+                "errorKey": "BOOKINGS_REQUIRE_AUTHENTICATION",
+                "variables": [],
+                "scope": "REQUEST",
+                "message": "Access denied: booking endpoints require an authenticated, delegated access token issued to the AI Agent on behalf of a user.",
+                "statusCode": 403
+              }
+            }
+          ],
+          "response": [],
+          "subscribe": [],
+          "publish": [],
+          "entrypointConnect": [],
+          "interact": [],
+          "tags": []
+        }
+      ],
       "name": "Public",
       "description": "Unrestricted access to MCP Server, and Open resources.",
       "security": {
@@ -293,6 +327,19 @@
                 "removeHeaders": []
               },
               "condition": "{#context.attributes['jwt.claims']['email'] != null}"
+            },
+            {
+              "name": "FGA Write Authorization",
+              "description": "Authorize booking modifications (updateBooking/cancelBooking) via OpenFGA can_modify/can_cancel before they reach the backend.",
+              "enabled": true,
+              "policy": "groovy",
+              "configuration": {
+                "scope": "REQUEST",
+                "readContent": false,
+                "overrideContent": false,
+                "script": "import groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\nimport io.gravitee.policy.groovy.PolicyResult.State\n\n// Authorize the write based on the operation invoked: PATCH (updateBooking) needs\n// can_modify, DELETE (cancelBooking) needs can_cancel. The accounting role can read\n// every booking but holds neither relation, so it is rejected here; only the guest\n// (owner) or a hotel admin passes.\ndef path = request.path\nif (path.endsWith('/')) { path = path.substring(0, path.length() - 1) }\ndef bookingId = path.substring(path.lastIndexOf('/') + 1)\ndef action = request.method == 'DELETE' ? 'can_cancel' : 'can_modify'\ndef userEmail = context.attributes['jwt.claims']['email']\n\ntry {\n    // Step 1: Get Bearer token via client_credentials\n    def tokenUrl = new URL('http://gio-am-gateway:8092/gravitee/oauth/token')\n    def tokenConn = tokenUrl.openConnection()\n    tokenConn.setRequestMethod('POST')\n    tokenConn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded')\n    tokenConn.setRequestProperty('Authorization', 'Basic aG90ZWwtbWNwOmhvdGVsLW1jcA==')\n    tokenConn.setDoOutput(true)\n    tokenConn.setConnectTimeout(5000)\n    tokenConn.setReadTimeout(5000)\n    tokenConn.getOutputStream().write('grant_type=client_credentials'.getBytes('UTF-8'))\n    tokenConn.getOutputStream().flush()\n    tokenConn.getOutputStream().close()\n    def tokenReader = new java.io.BufferedReader(new java.io.InputStreamReader(tokenConn.getInputStream()))\n    def tokenSb = new StringBuilder()\n    def tokenLine\n    while ((tokenLine = tokenReader.readLine()) != null) { tokenSb.append(tokenLine) }\n    tokenReader.close()\n    tokenConn.disconnect()\n    def bearerToken = new JsonSlurper().parseText(tokenSb.toString()).access_token\n\n    // Step 2: Evaluate the action against OpenFGA via the AuthZen endpoint\n    def payload = JsonOutput.toJson([\n        subject: [type: 'user', id: userEmail],\n        resource: [type: 'booking', id: bookingId],\n        action: [name: action]\n    ])\n    def evalUrl = new URL('http://gio-am-gateway:8092/gravitee/access/v1/evaluation')\n    def conn = evalUrl.openConnection()\n    conn.setRequestMethod('POST')\n    conn.setRequestProperty('Content-Type', 'application/json')\n    conn.setRequestProperty('Authorization', 'Bearer ' + bearerToken)\n    conn.setDoOutput(true)\n    conn.setConnectTimeout(5000)\n    conn.setReadTimeout(5000)\n    conn.getOutputStream().write(payload.getBytes('UTF-8'))\n    conn.getOutputStream().flush()\n    conn.getOutputStream().close()\n    def reader = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()))\n    def sb = new StringBuilder()\n    def line\n    while ((line = reader.readLine()) != null) { sb.append(line) }\n    reader.close()\n    conn.disconnect()\n    def decision = new JsonSlurper().parseText(sb.toString()).decision\n\n    if (decision != true) {\n        result.state = State.FAILURE\n        result.code = 403\n        result.error = JsonOutput.toJson([error: 'Not allowed to ' + action + ' this booking', booking: bookingId])\n        result.contentType = 'application/json'\n    }\n} catch (Exception e) {\n    // Fail closed: deny the write if the authorization decision cannot be obtained.\n    result.state = State.FAILURE\n    result.code = 403\n    result.error = JsonOutput.toJson([error: 'Authorization check failed'])\n    result.contentType = 'application/json'\n}"
+              },
+              "condition": "{(#request.method == 'PATCH' || #request.method == 'DELETE') && #request.path.startsWith('/hotels/bookings/')}"
             }
           ],
           "response": [

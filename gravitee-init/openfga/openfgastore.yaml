@@ -5,6 +5,10 @@ model: |+
 
   type user
 
+  type system
+    relations
+      define accounting: [user]
+
   type hotel
     relations
       define admin: [user, hotel#admin]
@@ -18,12 +22,48 @@ model: |+
   type booking
     relations
       define can_cancel: owner or admin from hotel
-      define can_view: owner or admin from hotel
+      define can_modify: owner or admin from hotel
+      define can_view: owner or admin from hotel or accounting from system
       define hotel: [hotel]
       define owner: [user, hotel#guest]
       define room: [room]
+      define system: [system]
 
 tuples:
+  # --- Accounting role ---
+  # The accountant can read EVERY booking (can_view via accounting from system)
+  # but cannot modify any booking unless they own it (can_modify/can_cancel stay
+  # owner-or-admin). Bookings are linked to the singleton system:acme below.
+  - user: user:accountant@gravitee.io
+    relation: accounting
+    object: system:acme
+
+  # --- Booking ↔ System relationships (so accounting can_view resolves) ---
+  - user: system:acme
+    relation: system
+    object: booking:BK-0001
+  - user: system:acme
+    relation: system
+    object: booking:BK-0002
+  - user: system:acme
+    relation: system
+    object: booking:BK-0003
+  - user: system:acme
+    relation: system
+    object: booking:BK-0004
+  - user: system:acme
+    relation: system
+    object: booking:BK-0005
+  - user: system:acme
+    relation: system
+    object: booking:BK-0006
+  - user: system:acme
+    relation: system
+    object: booking:BK-0007
+  - user: system:acme
+    relation: system
+    object: booking:BK-0008
+
   # --- Hotel guest relationships ---
   - user: user:john.doe@gravitee.io
     relation: guest

@@ -38,6 +38,25 @@ USER_EMAIL = "john.doe@gravitee.io"
 USER_USERNAME = "john.doe@gravitee.io"
 USER_PASSWORD = "HelloWorld@123"
 
+# Demo users to provision in the security domain. The accountant holds the
+# OpenFGA "accounting" role (see openfgastore.yaml) and can read every booking.
+USERS = [
+    {
+        "firstName": USER_FIRST_NAME,
+        "lastName": USER_LAST_NAME,
+        "email": USER_EMAIL,
+        "username": USER_USERNAME,
+        "password": USER_PASSWORD,
+    },
+    {
+        "firstName": "Anna",
+        "lastName": "Accountant",
+        "email": "accountant@gravitee.io",
+        "username": "accountant@gravitee.io",
+        "password": USER_PASSWORD,
+    },
+]
+
 MAX_RETRIES = 30
 RETRY_DELAY = 5
 
@@ -448,23 +467,30 @@ class GraviteeInitializer:
 
     # -- User management ---------------------------------------------------
 
-    def create_user(self) -> bool:
-        self.log(f"Creating user '{USER_USERNAME}'...")
+    def create_users(self) -> bool:
+        for user in USERS:
+            if not self._create_user(user):
+                return False
+        return True
+
+    def _create_user(self, user: Dict[str, str]) -> bool:
+        username = user["username"]
+        self.log(f"Creating user '{username}'...")
         try:
             r = self.session.post(f"{self._domain_url}/users", json={
-                "firstName": USER_FIRST_NAME,
-                "lastName": USER_LAST_NAME,
-                "email": USER_EMAIL,
-                "username": USER_USERNAME,
-                "password": USER_PASSWORD,
+                "firstName": user["firstName"],
+                "lastName": user["lastName"],
+                "email": user["email"],
+                "username": username,
+                "password": user["password"],
                 "forceResetPassword": False,
                 "preRegistration": False,
             }, timeout=10)
             if r.status_code == 400 and "already exists" in r.text.lower():
-                self.log(f"✓ User '{USER_USERNAME}' already exists, skipping creation")
+                self.log(f"✓ User '{username}' already exists, skipping creation")
                 return True
             r.raise_for_status()
-            self.log(f"✓ User '{USER_USERNAME}' created successfully")
+            self.log(f"✓ User '{username}' created successfully")
             return True
         except requests.exceptions.RequestException as exc:
             self._log_response_error("Failed to create user", exc)
@@ -590,7 +616,7 @@ class GraviteeInitializer:
         app_configs = _load_yaml_configs(APPS_CONFIG_DIR, self.log)
         if not self._create_all_applications(app_configs):
             return False
-        if not self.create_user():
+        if not self.create_users():
             return False
 
         mcp_configs = _load_yaml_configs(MCP_SERVERS_CONFIG_DIR, self.log)
@@ -606,7 +632,7 @@ class GraviteeInitializer:
         for app in self.apps:
             self.log(f"    • {app['name']} ({app['type']})")
             self.log(f"      Client ID: {app['clientId']}")
-        self.log(f"  - User: {USER_USERNAME}")
+        self.log(f"  - Users: {', '.join(u['username'] for u in USERS)}")
         self.log(f"  - MCP Servers created: {len(mcp_configs)}")
         for mcp in mcp_configs:
             self.log(f"    • {mcp['name']}")

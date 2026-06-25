@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, EmailStr
 from starlette.concurrency import run_in_threadpool
 
@@ -219,6 +219,9 @@ def _hotel_summary(h: Hotel) -> HotelSummary:
 
 OPENFGA_API_URL = os.getenv("OPENFGA_API_URL", "http://openfga:8080").rstrip("/")
 OPENFGA_STORE_NAME = os.getenv("OPENFGA_STORE_NAME", "Hotel Booking Authorization")
+# Singleton "system" object that every booking is linked to. The accounting role
+# is granted at this level so it resolves to can_view on every booking.
+OPENFGA_SYSTEM_ID = os.getenv("OPENFGA_SYSTEM_ID", "acme")
 
 _fga_store_id: Optional[str] = None
 
@@ -247,13 +250,15 @@ def _resolve_fga_store_id() -> str:
 
 
 def _write_booking_tuples(booking: Booking) -> None:
-    """Register owner + hotel tuples so the gateway's can_view check allows the
-    guest (owner) and hotel admins to see the new booking. Mirrors seed data."""
+    """Register owner + hotel + system tuples so the gateway's can_view check allows
+    the guest (owner) and hotel admins to see the new booking, and the accounting
+    role (granted at system level) can read it too. Mirrors seed data."""
     store_id = _resolve_fga_store_id()
     _fga_request("POST", f"/stores/{store_id}/write", {
         "writes": {"tuple_keys": [
             {"user": f"user:{booking.guest_email}", "relation": "owner", "object": f"booking:{booking.id}"},
             {"user": f"hotel:{booking.hotel_id}", "relation": "hotel", "object": f"booking:{booking.id}"},
+            {"user": f"system:{OPENFGA_SYSTEM_ID}", "relation": "system", "object": f"booking:{booking.id}"},
         ]},
     })
 
@@ -390,14 +395,16 @@ async def get_hotel_reviews(hotel_id: str):
     tags=["Bookings"],
     summary="List bookings",
     operation_id="listBookings",
-    description="Returns bookings for the authenticated user, identified by the X-User-Email header.",
+    description=(
+        "Returns all bookings. Authorization is enforced at the gateway: an OpenFGA "
+        "`can_view` response filter narrows the list per caller (a guest sees their "
+        "own bookings, the accounting role sees every booking)."
+    ),
 )
-async def list_bookings(
-    x_user_email: Optional[str] = Header(None, alias="X-User-Email", include_in_schema=False),
-):
-    if not x_user_email:
-        return []
-    return [b for b in _bookings.values() if b.guest_email.lower() == x_user_email.lower()]
+async def list_bookings():
+    # The API intentionally returns the full set; the gateway's FGA response filter
+    # is the policy enforcement point and decides which bookings each caller may see.
+    return list(_bookings.values())
 
 
 @app.get(
