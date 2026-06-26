@@ -180,6 +180,7 @@ def _load_bookings(hotels: dict[str, Hotel]) -> dict[str, Booking]:
             notes=b.get("notes", ""),
             created_at=datetime.now(),
             created_by_user=b.get("created_by_user"),
+            created_by_agent=b.get("created_by_agent"),
         )
         bookings[booking.id] = booking
     return bookings
@@ -238,6 +239,8 @@ OPENFGA_SYSTEM_ID = os.getenv("OPENFGA_SYSTEM_ID", "acme")
 # booking price limit is enforced here, via the OpenFGA `booking_creator` relation
 # (an ABAC condition: price <= limit, with the limit stored in the tuple).
 OPENFGA_AGENT_ID = os.getenv("OPENFGA_AGENT_ID", "hotel-ai-agent")
+# Price threshold for the controlling-role audit report (agent-created bookings above it).
+AUDIT_PRICE_THRESHOLD = float(os.getenv("AUDIT_PRICE_THRESHOLD", "3000"))
 
 _fga_store_id: Optional[str] = None
 
@@ -629,6 +632,29 @@ async def cancel_booking(booking_id: str):
     booking.status = BookingStatus.cancelled
     logger.info(f"Cancelled booking {booking_id}")
     return booking
+
+
+# ── Audit (controlling role) ────────────────────────────────────────────────
+
+@app.get(
+    "/audit-report",
+    response_model=list[Booking],
+    tags=["Audit"],
+    summary="Audit agent over-limit bookings",
+    operation_id="auditReport",
+    description=(
+        "Controlling report: lists every booking created by an AI agent whose total "
+        f"price exceeds {AUDIT_PRICE_THRESHOLD:.0f}. Access is restricted to the "
+        "'controlling' role, enforced at the gateway (OpenFGA)."
+    ),
+)
+async def audit_report():
+    # Authorization (the 'controlling' role) is enforced at the gateway; the API
+    # just returns the agent-created, over-limit bookings.
+    return [
+        b for b in _bookings.values()
+        if b.created_by_agent and b.total_price > AUDIT_PRICE_THRESHOLD
+    ]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

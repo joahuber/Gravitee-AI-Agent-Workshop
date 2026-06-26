@@ -10,6 +10,7 @@ model: |+
   type system
     relations
       define accounting: [user]
+      define controlling: [user]
       define booking_creator: [agent with within_price_limit]
 
   type hotel
@@ -67,6 +68,13 @@ tuples:
     relation: accounting
     object: system:acme
 
+  # --- Controlling role ---
+  # Harvey Specter holds the controlling role and may call the auditReport endpoint,
+  # which lists agent-created bookings priced above the spending limit.
+  - user: user:harvey.specter@littwheelerwilliamsbennett.com
+    relation: controlling
+    object: system:acme
+
   # --- Booking ↔ System relationships (so accounting can_view resolves) ---
   - user: system:acme
     relation: system
@@ -92,6 +100,13 @@ tuples:
   - user: system:acme
     relation: system
     object: booking:BK-0008
+  # BK-0009 / BK-0010 are agent-created, over-limit bookings (audit targets)
+  - user: system:acme
+    relation: system
+    object: booking:BK-0009
+  - user: system:acme
+    relation: system
+    object: booking:BK-0010
 
   # --- Hotel guest relationships ---
   - user: user:louis.litt@littwheelerwilliamsbennett.com

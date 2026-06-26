@@ -102,3 +102,33 @@ bookings:
     status: "confirmed"
     total_price: 2400.00
     notes: "Surfing holiday."
+
+  # Agent-created bookings priced above the 3000 spending limit (e.g. made before the
+  # limit was introduced). These are what the controlling role audits via auditReport.
+  - id: "BK-0009"
+    hotel_id: "grand-london"
+    guest_name: "Louis Litt"
+    guest_email: "louis.litt@littwheelerwilliamsbennett.com"
+    created_by_user: "louis.litt@littwheelerwilliamsbennett.com"
+    created_by_agent: "hotel-ai-agent"
+    room_type: "suite"
+    check_in_offset_days: 40
+    check_out_offset_days: 45
+    guests: 2
+    status: "confirmed"
+    total_price: 4750.00
+    notes: "Booked by the AI agent."
+
+  - id: "BK-0010"
+    hotel_id: "manhattan-grand"
+    guest_name: "Jane Doe"
+    guest_email: "jane.doe@gravitee.io"
+    created_by_user: "jane.doe@gravitee.io"
+    created_by_agent: "hotel-ai-agent"
+    room_type: "suite"
+    check_in_offset_days: 50
+    check_out_offset_days: 53
+    guests: 2
+    status: "confirmed"
+    total_price: 5400.00
+    notes: "Booked by the AI agent."

@@ -16,3 +16,15 @@ create another booking "Hotel ID: "grand-london" Guest Full Name: "Mike Ross" Gu
 
 # Denied: accounting may not modify a booking it does not own
 change booking BK-0002 to 1 guest
+
+
+# --- Controlling account (login: harvey.specter@littwheelerwilliamsbennett.com / HelloWorld@123) ---
+
+# Allowed: controlling runs the audit report (agent-created bookings priced over 3000)
+X: show me the audit report of agent bookings over 3000
+ok: list all agent bookings over 3000
+
+
+
+# Denied for everyone else: only the controlling role may run the audit report
+# (try the same prompt as Louis or Mike → 403)

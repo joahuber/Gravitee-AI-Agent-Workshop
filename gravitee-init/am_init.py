@@ -55,6 +55,13 @@ USERS = [
         "username": "mike.ross@littwheelerwilliamsbennett.com",
         "password": USER_PASSWORD,
     },
+    {
+        "firstName": "Harvey",
+        "lastName": "Specter",
+        "email": "harvey.specter@littwheelerwilliamsbennett.com",
+        "username": "harvey.specter@littwheelerwilliamsbennett.com",
+        "password": USER_PASSWORD,
+    },
 ]
 
 MAX_RETRIES = 30

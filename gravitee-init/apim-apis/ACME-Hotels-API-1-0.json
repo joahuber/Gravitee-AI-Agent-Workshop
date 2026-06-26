@@ -263,6 +263,39 @@
           "entrypointConnect": [],
           "interact": [],
           "tags": []
+        },
+        {
+          "name": "Protect Audit Report",
+          "enabled": true,
+          "selectors": [
+            {
+              "type": "HTTP",
+              "path": "/audit-report",
+              "pathOperator": "STARTS_WITH",
+              "methods": []
+            }
+          ],
+          "request": [
+            {
+              "name": "Block Anonymous Audit Access",
+              "description": "The audit report exposes booking data and is authorized via the OpenFGA 'controlling' role on the AI Agent (JWT) plan. Deny all keyless access.",
+              "enabled": true,
+              "policy": "policy-interrupt",
+              "configuration": {
+                "errorKey": "AUDIT_REQUIRES_AUTHENTICATION",
+                "variables": [],
+                "scope": "REQUEST",
+                "message": "Access denied: the audit report requires an authenticated, delegated access token issued to the AI Agent on behalf of a user.",
+                "statusCode": 403
+              }
+            }
+          ],
+          "response": [],
+          "subscribe": [],
+          "publish": [],
+          "entrypointConnect": [],
+          "interact": [],
+          "tags": []
         }
       ],
       "name": "Public",
@@ -356,6 +389,38 @@
               "condition": "{#request.method == 'GET' && (#request.path == '/hotels/bookings' || #request.path.startsWith('/hotels/bookings/'))}"
             }
           ],
+          "subscribe": [],
+          "publish": [],
+          "entrypointConnect": [],
+          "interact": [],
+          "tags": []
+        },
+        {
+          "name": "Audit Report Authorization",
+          "enabled": true,
+          "selectors": [
+            {
+              "type": "HTTP",
+              "path": "/audit-report",
+              "pathOperator": "STARTS_WITH",
+              "methods": []
+            }
+          ],
+          "request": [
+            {
+              "name": "Controlling Role Authorization",
+              "description": "Restrict the audit report to callers holding the 'controlling' role (OpenFGA controlling on system:acme).",
+              "enabled": true,
+              "policy": "groovy",
+              "configuration": {
+                "scope": "REQUEST",
+                "readContent": false,
+                "overrideContent": false,
+                "script": "import groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\nimport io.gravitee.policy.groovy.PolicyResult.State\n\n// The audit report is restricted to the 'controlling' role. Evaluate it via OpenFGA\n// (AuthZen): user has 'controlling' on system:acme. Deny (403) otherwise.\ndef userEmail = context.attributes['jwt.claims']['email']\ntry {\n    // Step 1: Get Bearer token via client_credentials\n    def tokenUrl = new URL('http://gio-am-gateway:8092/gravitee/oauth/token')\n    def tokenConn = tokenUrl.openConnection()\n    tokenConn.setRequestMethod('POST')\n    tokenConn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded')\n    tokenConn.setRequestProperty('Authorization', 'Basic aG90ZWwtbWNwOmhvdGVsLW1jcA==')\n    tokenConn.setDoOutput(true)\n    tokenConn.setConnectTimeout(5000)\n    tokenConn.setReadTimeout(5000)\n    tokenConn.getOutputStream().write('grant_type=client_credentials'.getBytes('UTF-8'))\n    tokenConn.getOutputStream().flush()\n    tokenConn.getOutputStream().close()\n    def tokenReader = new java.io.BufferedReader(new java.io.InputStreamReader(tokenConn.getInputStream()))\n    def tokenSb = new StringBuilder()\n    def tokenLine\n    while ((tokenLine = tokenReader.readLine()) != null) { tokenSb.append(tokenLine) }\n    tokenReader.close()\n    tokenConn.disconnect()\n    def bearerToken = new JsonSlurper().parseText(tokenSb.toString()).access_token\n\n    // Step 2: Evaluate the 'controlling' relation on system:acme\n    def payload = JsonOutput.toJson([\n        subject: [type: 'user', id: userEmail],\n        resource: [type: 'system', id: 'acme'],\n        action: [name: 'controlling']\n    ])\n    def evalUrl = new URL('http://gio-am-gateway:8092/gravitee/access/v1/evaluation')\n    def conn = evalUrl.openConnection()\n    conn.setRequestMethod('POST')\n    conn.setRequestProperty('Content-Type', 'application/json')\n    conn.setRequestProperty('Authorization', 'Bearer ' + bearerToken)\n    conn.setDoOutput(true)\n    conn.setConnectTimeout(5000)\n    conn.setReadTimeout(5000)\n    conn.getOutputStream().write(payload.getBytes('UTF-8'))\n    conn.getOutputStream().flush()\n    conn.getOutputStream().close()\n    def reader = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()))\n    def sb = new StringBuilder()\n    def line\n    while ((line = reader.readLine()) != null) { sb.append(line) }\n    reader.close()\n    conn.disconnect()\n    def decision = new JsonSlurper().parseText(sb.toString()).decision\n\n    if (decision != true) {\n        result.state = State.FAILURE\n        result.code = 403\n        result.error = JsonOutput.toJson([error: \"This report requires the 'controlling' role\"])\n        result.contentType = 'application/json'\n    }\n} catch (Exception e) {\n    // Fail closed: deny if the authorization decision cannot be obtained.\n    result.state = State.FAILURE\n    result.code = 403\n    result.error = JsonOutput.toJson([error: 'Authorization check failed'])\n    result.contentType = 'application/json'\n}"
+              }
+            }
+          ],
+          "response": [],
           "subscribe": [],
           "publish": [],
           "entrypointConnect": [],

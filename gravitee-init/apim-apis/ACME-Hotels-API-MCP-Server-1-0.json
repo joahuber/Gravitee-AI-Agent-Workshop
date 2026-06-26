@@ -1734,6 +1734,165 @@
                     "name": "cancelBooking",
                     "description": "Cancel a booking\n\nCancel an existing booking. Only confirmed bookings can be cancelled. Returns the updated booking with status 'cancelled'."
                   }
+                },
+                {
+                  "gatewayMapping": {
+                    "http": {
+                      "path": "/audit-report",
+                      "method": "GET"
+                    }
+                  },
+                  "toolDefinition": {
+                    "outputSchema": {
+                      "type": "object",
+                      "properties": {
+                        "bodySchema": {
+                          "type": "array",
+                          "title": "Response Listbookings",
+                          "items": {
+                            "description": "A hotel room booking.",
+                            "type": "object",
+                            "title": "Booking",
+                            "properties": {
+                              "check_out": {
+                                "examples": [
+                                  "2025-06-22"
+                                ],
+                                "format": "date",
+                                "description": "Check-out date",
+                                "type": "string",
+                                "title": "Check Out"
+                              },
+                              "notes": {
+                                "default": "",
+                                "description": "Special requests or notes",
+                                "type": "string",
+                                "title": "Notes"
+                              },
+                              "guest_name": {
+                                "examples": [
+                                  "Louis Litt"
+                                ],
+                                "description": "Guest full name",
+                                "type": "string",
+                                "title": "Guest Name"
+                              },
+                              "total_price": {
+                                "examples": [
+                                  3360
+                                ],
+                                "description": "Total price in USD",
+                                "type": "number",
+                                "title": "Total Price"
+                              },
+                              "hotel_id": {
+                                "examples": [
+                                  "grand-london"
+                                ],
+                                "description": "Hotel identifier",
+                                "type": "string",
+                                "title": "Hotel Id"
+                              },
+                              "check_in": {
+                                "examples": [
+                                  "2025-06-15"
+                                ],
+                                "format": "date",
+                                "description": "Check-in date",
+                                "type": "string",
+                                "title": "Check In"
+                              },
+                              "guest_email": {
+                                "examples": [
+                                  "louis.litt@littwheelerwilliamsbennett.com"
+                                ],
+                                "format": "email",
+                                "description": "Guest email address",
+                                "type": "string",
+                                "title": "Guest Email"
+                              },
+                              "guests": {
+                                "examples": [
+                                  2
+                                ],
+                                "description": "Number of guests",
+                                "type": "integer",
+                                "title": "Guests",
+                                "minimum": 1
+                              },
+                              "created_at": {
+                                "format": "date-time",
+                                "description": "Booking creation timestamp",
+                                "type": "string",
+                                "title": "Created At"
+                              },
+                              "hotel_name": {
+                                "examples": [
+                                  "The Grand London"
+                                ],
+                                "description": "Hotel name (denormalised for convenience)",
+                                "type": "string",
+                                "title": "Hotel Name"
+                              },
+                              "room_type": {
+                                "examples": [
+                                  "deluxe"
+                                ],
+                                "description": "Room type booked",
+                                "type": "string",
+                                "title": "Room Type"
+                              },
+                              "status": {
+                                "examples": [
+                                  "confirmed"
+                                ],
+                                "description": "Booking status",
+                                "type": "string",
+                                "title": "BookingStatus",
+                                "enum": [
+                                  "confirmed",
+                                  "completed",
+                                  "cancelled"
+                                ]
+                              },
+                              "created_by_user": {
+                                "description": "User who created the booking (for an agent call, the user the agent acted on behalf of).",
+                                "type": "string",
+                                "title": "Created By User"
+                              },
+                              "created_by_agent": {
+                                "description": "AI agent that created the booking on the user's behalf, or null when a user created it directly.",
+                                "type": "string",
+                                "title": "Created By Agent"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "hotel_id",
+                              "hotel_name",
+                              "guest_name",
+                              "guest_email",
+                              "room_type",
+                              "check_in",
+                              "check_out",
+                              "guests",
+                              "status",
+                              "total_price",
+                              "created_at"
+                            ]
+                          }
+                        }
+                      },
+                      "required": []
+                    },
+                    "inputSchema": {
+                      "type": "object",
+                      "properties": {},
+                      "required": []
+                    },
+                    "name": "auditReport",
+                    "description": "Audit agent over-limit bookings\n\nLists every booking created by an AI agent whose total price exceeds the spending limit (3000). Restricted to callers holding the 'controlling' role (enforced via OpenFGA)."
+                  }
                 }
               ]
             }
